@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.8.2 <0.9.0;
+
+// The DAO Project - 
+// In this we are going to make a decentrallized automous organization in which the concept is as follows
+// 1) Some investors are investing money at one place
+// 2) Then on that money each investor propose there own business proposal
+// 3) Then they vote for the proposal
+// 4) The proposal got the maximum no of votes will get got the total money of investment 
+// 5) And above 4) is executed by a single authority which is only existed for execution purpose
+// 1 wei = 1 share is the definition we are uisng in this
+
+contract DAO
+{
+    // We create the proposal template first
+    struct proposal
+    {
+        uint id;
+        string description;
+        uint amount;
+        address payable recipient;
+        uint votes;
+        uint end;
+        bool isexecuted;
+    }
+
+    // This is to check whether it is investor or not
+    mapping(address => bool) private isInvestor;
+
+    // This is for no of shares given after investing 
+    mapping(address => uint) public no_of_shares;
+
+    //This is for voting is done or not
+    mapping (address => mapping (uint => bool)) public isvoted;
+
+    // 
+    mapping(address => mapping (address => bool)) public withdrawlstatus;
+
+    // investors list
+    address[] public investorlist;
+
+    // numbering the proposals
+    mapping(uint => proposal) public allproposal;
+
+    // Variables
+    uint public totalshares;
+    uint public availablefunds;
+    uint public investment_time_end;
+    uint public next_proposal_id;
+    uint public vote_time;
+    uint public quorum; // quorum is the minimum no of votes to take decision
+    address public manager;
+
+    // constructor is to set intial conditions
+    constructor(uint _investment_time_end , uint _vote_time , uint _quorum){
+        require(_quorum > 0 && _quorum < 100,"Not valid");
+        investment_time_end = block.timestamp +  _investment_time_end;
+        vote_time = _vote_time;
+        quorum = _quorum;
+        manager = msg.sender;
+    }
+    //In the modifier, checks whether the msg.sender (the caller of the function) is registered as an investor in the 
+    // isInvestor mapping.
+
+    modifier onlyInvestor(){
+        require(isInvestor[msg.sender] == true,"You are not an investor");
+        _;
+    }
+
+    // In the modifier, checks whether the msg.sender (the caller of the function) is manager or not
+
+    modifier onlyManager(){
+        require(manager == msg.sender,"you are not a manager");
+        _;
+    }
+
+    // Investing money to the pool and gets tokens(shares) from the organization
+    function invest() public payable {
+        require(investment_time_end >= block.timestamp , "Contribution time ended");
+        require(msg.value > 0,"Send more than zero ether for the investment");
+         isInvestor[msg.sender] = true;
+         no_of_shares[msg.sender] = no_of_shares[msg.sender] + msg.value;
+         totalshares = totalshares + msg.value;
+         availablefunds = availablefunds + msg.value;
+         investorlist.push(msg.sender);
+    }
+
+    // if someone wants to remove his money he can sold his shares back to organizations
+    function redeemshares(uint amount) public onlyInvestor(){
+        require(no_of_shares[msg.sender] >= amount , " You don't have enough shares");
+        require(availablefunds > amount , "Not enough funds");
+        no_of_shares[msg.sender] = no_of_shares[msg.sender] - amount;
+        if(no_of_shares[msg.sender] == 0){
+            isInvestor[msg.sender] = false;
+        }
+        availablefunds = availablefunds - amount;
+        payable (msg.sender).transfer(amount);
+    }
+
+
+    // if someone wants to give his tokens/shares to another
+    function transfer_share(uint amount , address to) public onlyInvestor(){
+        require(availablefunds >= amount,"Not enough funds");
+        require(no_of_shares[msg.sender] >= amount,"Not enough shares");
+        no_of_shares[msg.sender] = no_of_shares[msg.sender] - amount;
+        if(no_of_shares[msg.sender] == 0)
+        {
+            isInvestor[msg.sender] = false;
+        }
+        no_of_shares[to] = no_of_shares[to] + amount;
+        isInvestor[to] = true;
+        investorlist.push(to);
+
+    }
+
+    function createproposal(string calldata description , uint amount , address payable recipient) public onlyManager(){
+        require(availablefunds >= amount , "Not enough funds");
+        allproposal[next_proposal_id] = proposal(next_proposal_id , description , amount , recipient , 0 , block.timestamp + vote_time,false);
+        next_proposal_id++;
+    }
+
+    function voteproposal(uint proposalID)public onlyInvestor(){
+        require(isvoted[msg.sender][proposalID] == false , "You already voted");
+        require(allproposal[proposalID].end >= block.timestamp,"Voting time is ended");
+        require(allproposal[proposalID].isexecuted == false, "Already executed");
+        isvoted[msg.sender][proposalID]=true;
+        allproposal[proposalID].votes+= no_of_shares[msg.sender];
+        
+    }
+
+    function executeproposal(uint proposalID) public onlyManager(){
+        proposal storage Proposal = allproposal[proposalID];
+        require((Proposal.votes*100)/totalshares >= quorum,"Majority does not support");
+        Proposal.isexecuted = true;
+        availablefunds-=Proposal.amount;
+        Proposal.recipient.transfer(Proposal.amount);
+
+   
+    }
+
+    function proposallist() public view returns (proposal[] memory){
+        proposal[] memory arr = new proposal[](next_proposal_id - 1); // becaue proposalID is incrementing ater creating see the function
+        for(uint i=0 ; i<next_proposal_id;i++)
+        {
+            arr[i] =allproposal[i]; 
+        }
+        return arr;
+
+
+    }
+
+}
+
+
+
+// 1) investor  =  0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2 = 100 wei
+// 2) 0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db = 100 wei
+// 3)  0x78731D3Ca6b7E34aC0F824c42a7cC18A495cabaB = 300 wei
+
+// manager = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4

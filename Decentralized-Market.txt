@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.8.2 <0.9.0;
+
+// Smart contract for decentralized marketplace
+
+contract Decentralized_marketplace
+{
+    struct item_sale
+    {
+        string name;
+        string description;
+        uint price;
+        address payable  seller_address;
+        bool availibility;
+    }
+    
+    event ItemListed(uint256 itemId, string name, uint256 price, address seller);
+    event OrderPlaced(uint256 itemId, address buyer);
+    event TransactionCompleted(uint256 itemId, address buyer, address seller, uint256 price);
+
+    mapping(uint => item_sale) public items;
+    uint public total;
+
+    constructor(){
+        total = 0;
+    }
+
+    function item_for_sale(string memory _name , string memory _description , uint _price)public {
+        total++; // because of this our counting start with 1 instead of 0
+        items[total] = item_sale(_name , _description , _price , payable (msg.sender) ,true);
+
+        emit ItemListed(total, _name, _price, msg.sender);   
+    }
+
+
+    function place_order(uint id) public payable {
+        require(id > 0 && id <= total, "Invallid ID");
+        require(items[id].availibility == true , "Item is not available for sale");
+        require(msg.value == items[id].price,"Incorrect payment amount");
+        items[id].availibility = false;
+        emit OrderPlaced(id, msg.sender);
+    }
+
+    function verify_transaction(uint id) public{
+        require(id>0 && id<=total,"Invalid ID");
+        require(! items[id].availibility,"Item is still available"); // This step is the verification whether above function is called or not before coming to this function
+        require(msg.sender != items[id].seller_address , "Seller cannot complete the transactions");
+        items[id].seller_address.transfer(items[id].price);
+
+        emit TransactionCompleted(id, msg.sender, items[id].seller_address, items[id].price);
+    
+    }
+
+
+
+    function retrieve_info(uint id)public view returns(item_sale memory) 
+    {
+        require(id>0 && id <= total , "Invallid ID");
+        item_sale[] memory arr = new  item_sale[](total);
+        for(uint i=1;i<total;i++)
+        {
+            arr[i] = items[i];
+        }
+        return arr[id];
+    }
+
+
+}

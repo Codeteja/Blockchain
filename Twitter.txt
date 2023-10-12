@@ -1,0 +1,156 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.8.2 <0.9.0;
+
+contract twitter
+{
+    struct tweeter
+    {
+        // info of Author who posted the tweet
+        uint id; 
+        address author;
+        string content;
+        uint createdAT;
+    }    
+
+    struct Message
+    {
+        // message/chat format
+        uint id;
+        string content;
+        address from;
+        address to;
+        uint createdAT;
+    }
+
+    // tweets is used to save the complete info of independent person who is posting the tweet
+    mapping (uint => tweeter) public tweets;
+
+    // tweetsof is used for saving the id of the tweets given by the address  
+    mapping (address => uint[]) public tweetsof; //e.g = [2,5,15,29 ...]
+
+    // conversation map is used to map to address to its messages which are stored in the Message[]
+    mapping (address => Message[]) public conversations;
+
+    // Operator map is used to give or revoke access from someone we want 
+    mapping (address => mapping (address => bool)) public operators;
+
+    // following map is used to map address to the address array which stores addresses of our followers
+    mapping(address => address[]) public following;// the followers
+
+
+    uint nextID;
+    uint nextMessageID;
+
+
+    // Function for tweets
+    // function takes address from where the tweeet is coming and the content of the tweet
+    // block.timestamp gives us the time at which it is created
+    // these functions work internally 
+    function _tweet(address _from , string memory _content) internal  { // Owner-Authority
+        require(_from == msg.sender || operators[_from][msg.sender] , "Access Denied");
+        tweets[nextID] = tweeter(nextID ,  _from , _content , block.timestamp );
+        tweetsof[_from].push(nextID); // this is specifically to save the no 1,2,3..
+        nextID = nextID + 1; // so whenever we call the function it is ready to star with new
+    }
+    // Function for messages
+    // Message[] stores messages from same user which is mapped by mapping defined above
+    // this also works internally
+    function send_message(address _from , address _to , string memory msgcontent) internal  { //Owner-Authority
+        // each address maps to Message array from same address so address => (Msg1,Msg2,...) from the same ID
+        require(_from == msg.sender || operators[_from][msg.sender] , "Access Denied");
+        conversations[_from].push(Message(nextMessageID , msgcontent , _from , _to , block.timestamp));
+        nextMessageID = nextMessageID + 1;
+    }
+
+    // Now we make a function for the owner of the account
+    // hence msg.sender is the default address set for that because it is the owners address 
+    function tweet(string memory _content) public{ // Owner
+        _tweet(msg.sender, _content);
+    }
+    // this function is for that one who have access given by the owner of account to handle/use his twitter
+    function tweet(address _from ,string memory _content) public{ // Owner access
+        _tweet(_from, _content);
+    }
+    //Similar for sending messages
+    //Owner should use this function
+    function sendmessage( address _to, string memory msgcontent) public { //owner
+        send_message(msg.sender, _to, msgcontent);
+    }
+    // one who have access from owner 
+    function sendmessage(address _from, address _to, string memory msgcontent) public { // Owner
+        send_message(_from, _to, msgcontent);
+    }
+    // interesting thing happens above is we are using tweet and sendmessage name for function twice and there is no error 
+    // this concept is called as polymorphism this thing is allowed with a condition that either the argument of the function
+    // should be different or the no of arguments to the function is different in these cases soldity allow same names
+
+
+    // function for followings 
+    // this stores people owner is following
+    function follow(address to_be_followed)public{
+        following[msg.sender].push(to_be_followed); 
+    }
+
+    // function for the allow access
+    function allow(address _operator) public{
+        operators[msg.sender][_operator] = true;
+    }
+
+    // function for the disallow access
+    function disallow(address _operator) public{
+        operators[msg.sender][_operator] = false;
+    }
+    
+    // function to fetch latest tweets
+    // count < nextID means there are (nextID) no of tweets happend and we want some latest (count) tweets from that
+    // twits variable is a array of struct tweeter that is used to store latest tweets
+    function getlatesttweets(uint count) public view returns(tweeter[] memory){
+        require(count>0 && count < nextID,"Count is not proper");
+        tweeter[] memory twits = new tweeter[](count); // array of length count of type struct tweeter
+
+        //now we fill that array created above which is of type struct tweeter
+        uint j;
+        for(uint i = nextID - count ; i < nextID ;  i++){
+            // now we use the mapping tweets to fetch the tweets(along with the struture aas mapping is defined on it)
+            tweeter storage _structure = tweets[i];
+            // now using _structure variable we we fill the array which is designed store this tweets mapped by maaping tweets
+            twits[j] = tweeter(_structure.id , _structure.author , _structure.content , _structure.createdAT);
+            j = j + 1;
+        
+        }
+        return twits;
+
+    }
+
+    // This function is now for latest tweets in personal user account 
+
+    function getuserlatest(address _user , uint count) public view returns(tweeter[] memory){
+        tweeter[] memory personaltwits = new tweeter[](count); //because we want to save tweets
+        require(count>0 && count < nextID , "Count is not defined");
+        uint j;
+
+        for(uint i = tweetsof[_user].length - count ; i < tweetsof[_user].length ; i++ )
+        {
+            tweeter storage _structure = tweets[tweetsof[_user][i]];
+            personaltwits[j] = tweeter(_structure.id , _structure.author , _structure.content , _structure.createdAT);
+            j = j + 1;
+
+        }
+        return personaltwits;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}

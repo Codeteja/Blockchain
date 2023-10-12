@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.8.2 <0.9.0;
+
+// We have to build and auction system
+
+contract auction
+{
+    // structure of item 
+    struct item_info
+    {
+        string name;
+        string description;
+        address payable highestbidder;
+        uint Current_highest_bid;
+
+    }
+
+    mapping(uint => item_info) public item_id;
+    uint public total_items;
+
+    // initialize total items to 0
+    constructor(){
+        total_items = 0;
+    }
+
+    // function to create itema called by participant of Auction
+    function createitem(string memory _name , string memory _description)public {
+        total_items++;
+        item_id[total_items] = item_info(_name , _description , payable(msg.sender), 0);
+    }
+
+    // Placing bids on the items
+    function place_bids(uint id,uint bid_amount) public payable {
+
+        require(id > 0 && id <= total_items,"id is not valid");
+        require(bid_amount > item_id[id].Current_highest_bid,"Bid amount must be higher than current bid");
+        if(item_id[id].highestbidder != address(0))
+        {
+            item_id[id].highestbidder.transfer(item_id[id].Current_highest_bid);
+        }
+        item_id[id].highestbidder = payable (msg.sender);
+        item_id[id].Current_highest_bid = bid_amount;
+
+    }
+
+    function winning_bid(uint id) public view returns (uint , address){
+        require(id > 0 && id < total_items,"Invalid ID");
+        return (item_id[id].Current_highest_bid , item_id[id].highestbidder);
+    }
+}
